@@ -1,16 +1,17 @@
-package grad_test
+package grad
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
-	"github.com/gograd/grad"
 	"github.com/stretchr/testify/require"
 )
 
-func TestForward(t *testing.T) {
-	a := grad.Var(2, "a")
-	b := grad.Var(-3, "b")
-	c := grad.Var(10, "c")
+func TestScalar(t *testing.T) {
+	a := Var(2, "a")
+	b := Var(-3, "b")
+	c := Var(10, "c")
 
 	// d = a*b + c
 	d := a.Mul(b).Add(c)
@@ -37,4 +38,35 @@ func TestForward(t *testing.T) {
 	// (3 * -3) + 10 = 1
 	// da / dd = -3
 	require.EqualValues(t, -3, a.Grad())
+}
+
+func TestNeuron(t *testing.T) {
+	ru := randUnit
+	randUnit = func() float64 { return 0.5 }
+	t.Cleanup(func() {
+		randUnit = ru
+	})
+	expected := math.Tanh(1*0.5 + 2*0.5 + 0.5)
+	n := NewNeuron(2)
+	out := n.Act([]*Scalar{Val(1), Val(2)})
+	require.EqualValues(t, expected, out.Data())
+}
+
+func TestMLP(t *testing.T) {
+	mlp := NewMLP(3, []int{4, 4, 1})
+	outs := mlp.Act([]*Scalar{Val(1), Val(2), Val(3)})
+	require.Len(t, outs, 1)
+
+	params := mlp.Parameters()
+	params.ZeroGrad()
+
+	out := outs[0]
+	out.Backward()
+	dot := DrawDot(out)
+	fmt.Println(dot)
+
+	params.ZeroGrad()
+	for _, p := range params {
+		fmt.Println(p.String())
+	}
 }

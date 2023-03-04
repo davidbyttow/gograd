@@ -46,8 +46,14 @@ func DrawDot(n *Scalar) string {
 
 	for _, n := range dag.nodes {
 		id := dag.ids[n]
+		var label string
+		if n.Label != "" {
+			label = fmt.Sprintf(`{ %s | data %0.4f | grad %0.4f }`, n.Label, n.data, n.grad)
+		} else {
+			label = fmt.Sprintf(`{ data %0.4f | grad %0.4f }`, n.data, n.grad)
+		}
 		g.AddNode("G", id, map[string]string{
-			"label": fmt.Sprintf(`{ %s | data %0.4f | grad %0.4f }`, n.Label, n.data, n.grad),
+			"label": label,
 			"shape": "record",
 		})
 		if n.op != "" {

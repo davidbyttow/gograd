@@ -3,7 +3,126 @@ package grad
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 )
+
+var rng *rand.Rand
+
+func init() {
+	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+// randUnit generate random float between [-1,1]
+var randUnit = func() float64 {
+	return rng.Float64()*2 - 1
+}
+
+// MLP is a multilayer perceptron
+type MLP struct {
+	layers []*Layer
+}
+
+func NewMLP(numIn int, numOuts []int) *MLP {
+	outs := append([]int{numIn}, numOuts...)
+	layers := make([]*Layer, len(numOuts))
+	for i := 0; i < len(numOuts); i++ {
+		l := NewLayer(outs[i], outs[i+1])
+		if i != len(numOuts)-1 {
+			for _, n := range l.neurons {
+				n.nonLinear = true
+			}
+		}
+		layers[i] = l
+	}
+	return &MLP{layers}
+}
+
+func (p *MLP) Act(x []*Scalar) []*Scalar {
+	for _, l := range p.layers {
+		x = l.Act(x)
+	}
+	return x
+}
+
+func (p *MLP) Parameters() Parameters {
+	var params []*Scalar
+	for _, l := range p.layers {
+		params = append(params, l.Parameters()...)
+	}
+	return params
+}
+
+type Layer struct {
+	neurons []*Neuron
+}
+
+func NewLayer(numIn int, numOut int) *Layer {
+	neurons := make([]*Neuron, numOut)
+	for i := 0; i < numOut; i++ {
+		neurons[i] = NewNeuron(numIn)
+	}
+	return &Layer{neurons}
+}
+
+func (l *Layer) Act(x []*Scalar) []*Scalar {
+	outs := make([]*Scalar, len(l.neurons))
+	for i := 0; i < len(outs); i++ {
+		outs[i] = l.neurons[i].Act(x)
+	}
+	return outs
+}
+
+func (l *Layer) Parameters() Parameters {
+	var params []*Scalar
+	for _, n := range l.neurons {
+		params = append(params, n.Parameters()...)
+	}
+	return params
+}
+
+type Neuron struct {
+	weights   []*Scalar
+	bias      *Scalar
+	nonLinear bool
+}
+
+func NewNeuron(numIn int) *Neuron {
+	if numIn < 1 {
+		panic("invalid neuron input size")
+	}
+	n := &Neuron{
+		bias: Val(0),
+	}
+	n.weights = make([]*Scalar, numIn)
+	for i := 0; i < numIn; i++ {
+		n.weights[i] = Val(randUnit())
+	}
+	return n
+}
+
+func (n *Neuron) Act(x []*Scalar) *Scalar {
+	if len(x) != len(n.weights) {
+		panic("invalid input count")
+	}
+	// bias + x1*w1 + x2*w2 + ... + xn*wn
+	act := n.bias
+	for i := 0; i < len(x); i++ {
+		act = act.Add(x[i].Mul(n.weights[i]))
+	}
+
+	// TODO(d): handle nonLinear case
+	// if n.nonLinear {
+	// 	return act.ReLU()
+	// }
+	// return act
+
+	return act.TanH()
+}
+
+func (n *Neuron) Parameters() Parameters {
+	return append(n.weights, n.bias)
+}
 
 // Scalar is a node like Tensor except for scalar values only
 // It implements simple backpropagation and gradient computation
@@ -16,16 +135,12 @@ type Scalar struct {
 	Label    string
 }
 
-func Const(data float64) *Scalar {
+func Val(data float64) *Scalar {
 	return &Scalar{data: data}
 }
 
 func Var(data float64, label string) *Scalar {
 	return &Scalar{data: data, Label: label}
-}
-
-func Res(data float64, children []*Scalar, op string) *Scalar {
-	return &Scalar{data: data, op: op, children: children}
 }
 
 func (v *Scalar) Data() float64 {
@@ -41,7 +156,6 @@ func (v *Scalar) Add(other *Scalar) *Scalar {
 		data:     v.data + other.data,
 		children: []*Scalar{v, other},
 		op:       "+",
-		Label:    fmt.Sprintf("%s+%s", v.Label, other.Label),
 	}
 	out.backward = func() {
 		v.grad += 1 * out.grad
@@ -55,7 +169,6 @@ func (v *Scalar) Mul(other *Scalar) *Scalar {
 		data:     v.data * other.data,
 		children: []*Scalar{v, other},
 		op:       "*",
-		Label:    fmt.Sprintf("%s*%s", v.Label, other.Label),
 	}
 	out.backward = func() {
 		v.grad += other.data * out.grad
@@ -64,14 +177,24 @@ func (v *Scalar) Mul(other *Scalar) *Scalar {
 	return out
 }
 
+func (v *Scalar) Pow(exp float64) *Scalar {
+	out := &Scalar{
+		data:     math.Pow(v.data, exp),
+		children: []*Scalar{v},
+		op:       fmt.Sprintf("**%0.4f", exp),
+	}
+	out.backward = func() {
+		v.grad += exp * math.Pow(v.data, (exp-1)) * out.grad
+	}
+	return out
+}
+
 func (v *Scalar) TanH() *Scalar {
 	x := v.data
-	//t := (math.Exp(2*x) - 1) / (math.Exp(2*x) + 1)
 	t := math.Tanh(x)
 	out := &Scalar{
 		data:     t,
 		children: []*Scalar{v},
-		Label:    fmt.Sprintf("tanh(%s)", v.Label),
 		op:       "tanh",
 	}
 	out.backward = func() {
@@ -81,7 +204,11 @@ func (v *Scalar) TanH() *Scalar {
 }
 
 func (v *Scalar) Neg() *Scalar {
-	return v.Mul(Const(-1))
+	return v.Mul(Val(-1))
+}
+
+func (v *Scalar) Sub(other *Scalar) *Scalar {
+	return v.Add(other.Neg())
 }
 
 func (v *Scalar) ReLU() *Scalar {
@@ -92,7 +219,6 @@ func (v *Scalar) ReLU() *Scalar {
 	out := &Scalar{
 		data:     f,
 		children: []*Scalar{v},
-		Label:    fmt.Sprintf("ReLU(%s)", v.Label),
 		op:       "ReLU",
 	}
 	out.backward = func() {
@@ -101,6 +227,10 @@ func (v *Scalar) ReLU() *Scalar {
 		}
 	}
 	return out
+}
+
+func (v *Scalar) Descend(delta float64) {
+	v.data += -delta * v.grad
 }
 
 // Backward calls the backward function for each method in a breadth-first way starting
@@ -122,21 +252,29 @@ func (v *Scalar) Backward() {
 	}
 	build(v)
 	v.grad = 1
-	reverseSlice(topo)
-	for _, cv := range topo {
-		if cv.backward != nil {
-			cv.backward()
+	for i := len(topo) - 1; i >= 0; i-- {
+		if topo[i].backward != nil {
+			topo[i].backward()
 		}
 	}
 }
 
 func (v *Scalar) String() string {
-	return fmt.Sprintf("Scalar(%s, data=%v, grad=%v)", v.Label, v.data, v.grad)
+	return fmt.Sprintf("Scalar(data=%0.4f, grad=%0.4f)", v.data, v.grad)
 }
 
-func reverseSlice[T any](x []T) []T {
-	for i, j := 0, len(x)-1; i < j; i, j = i+1, j-1 {
-		x[i], x[j] = x[j], x[i]
+type Parameters []*Scalar
+
+func (p Parameters) ZeroGrad() {
+	for _, pm := range p {
+		pm.grad = 0
 	}
-	return x
+}
+
+func Scalars(vals ...float64) []*Scalar {
+	out := make([]*Scalar, len(vals))
+	for i, v := range vals {
+		out[i] = Val(v)
+	}
+	return out
 }
