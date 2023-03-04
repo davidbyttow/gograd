@@ -8,9 +8,7 @@ import (
 )
 
 func main() {
-	x := grad.Scalars(2, 3, -1)
 	n := grad.NewMLP(3, []int{4, 4, 1})
-	n.Act(x)
 
 	xs := [][]*grad.Scalar{
 		grad.Scalars(2, 3, -1),
