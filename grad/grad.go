@@ -24,10 +24,10 @@ type MLP struct {
 }
 
 func NewMLP(numIn int, numOuts []int) *MLP {
-	outs := append([]int{numIn}, numOuts...)
+	sz := append([]int{numIn}, numOuts...)
 	layers := make([]*Layer, len(numOuts))
 	for i := 0; i < len(numOuts); i++ {
-		l := NewLayer(outs[i], outs[i+1])
+		l := NewLayer(sz[i], sz[i+1])
 		if i != len(numOuts)-1 {
 			for _, n := range l.neurons {
 				n.nonLinear = true
@@ -92,7 +92,7 @@ func NewNeuron(numIn int) *Neuron {
 		panic("invalid neuron input size")
 	}
 	n := &Neuron{
-		bias: Val(0),
+		bias: Val(randUnit()),
 	}
 	n.weights = make([]*Scalar, numIn)
 	for i := 0; i < numIn; i++ {
