@@ -27,7 +27,8 @@ func main() {
 		for _, x := range xs {
 			ypred = append(ypred, n.Act(x)...)
 		}
-		loss = calcLoss(ys, ypred)
+
+		loss = grad.MeanSquaredError(ys, ypred)
 
 		// backward pass
 		n.Parameters().ZeroGrad()
@@ -46,16 +47,4 @@ func main() {
 	}
 
 	fmt.Println("result =", loss.Data())
-}
-
-func calcLoss(actuals []*grad.Scalar, preds []*grad.Scalar) *grad.Scalar {
-	if len(actuals) != len(preds) {
-		panic("invalid inputs")
-	}
-	loss := grad.Val(0)
-	for i, actual := range actuals {
-		pred := preds[i]
-		loss = loss.Add(pred.Sub(actual).Pow(2))
-	}
-	return loss
 }

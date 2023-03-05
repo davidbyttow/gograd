@@ -117,7 +117,7 @@ func (n *Neuron) Act(x []*Scalar) *Scalar {
 	// }
 	// return act
 
-	return act.TanH()
+	return act.Tanh()
 }
 
 func (n *Neuron) Parameters() Parameters {
@@ -189,7 +189,7 @@ func (v *Scalar) Pow(exp float64) *Scalar {
 	return out
 }
 
-func (v *Scalar) TanH() *Scalar {
+func (v *Scalar) Tanh() *Scalar {
 	x := v.data
 	t := math.Tanh(x)
 	out := &Scalar{
@@ -277,4 +277,16 @@ func Scalars(vals ...float64) []*Scalar {
 		out[i] = Val(v)
 	}
 	return out
+}
+
+func MeanSquaredError(ygts []*Scalar, ypreds []*Scalar) *Scalar {
+	if len(ygts) != len(ypreds) {
+		panic("invalid inputs")
+	}
+	loss := Val(0)
+	for i, ygt := range ygts {
+		pred := ypreds[i]
+		loss = loss.Add(pred.Sub(ygt).Pow(2))
+	}
+	return loss
 }

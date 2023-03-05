@@ -40,6 +40,36 @@ func TestScalar(t *testing.T) {
 	require.EqualValues(t, -3, a.Grad())
 }
 
+func TestAllOps(t *testing.T) {
+	a := Val(-4)
+	require.EqualValues(t, -4, a.Data())
+	b := a.ReLU()
+	require.EqualValues(t, 0, b.Data())
+	c := b.Add(Val(10))
+	require.EqualValues(t, 10, c.Data())
+	d := c.Tanh()
+	require.EqualValues(t, math.Tanh(10), d.Data())
+	e := d.Neg()
+	require.EqualValues(t, -math.Tanh(10), e.Data())
+	f := e.Pow(2)
+	require.EqualValues(t, 1, math.Round(f.Data()))
+	g := f.Sub(Val(10))
+	require.EqualValues(t, -9, math.Round(g.Data()))
+
+	g.Backward()
+	require.EqualValues(t, 1.6489228991292286e-08, b.Grad())
+}
+
+func TestMeanSquaredError(t *testing.T) {
+	ygts := Scalars(1, 1, 1)
+	ypreds := Scalars(2, 2, 2)
+	mse := MeanSquaredError(ygts, ypreds)
+	mse.Backward()
+
+	require.EqualValues(t, 2, ypreds[0].Grad())
+	require.EqualValues(t, 3, mse.Data())
+}
+
 func TestNeuron(t *testing.T) {
 	ru := randUnit
 	randUnit = func() float64 { return 0.5 }
